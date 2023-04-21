@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <math.h>
 #include <TFile.h>
+#include <TChain.h>
 #include <TTree.h>
 #include <TSystem.h>
 #include <TTreeReader.h>
@@ -54,8 +55,24 @@ int main(int argc, char *argv[]){
   //p_decay_time->Draw();
   TCanvas tcd = TCanvas();
 
+  TFile *chain_file = TFile::Open("./10Mopticalphoton.root","CREATE");
+  if(chain_file != nullptr){
+    
+    cout << "combining photon files (will take a minute, not necessary on subsequent runs)" << endl;
+    TChain *ch = new TChain("tree","combined photon files");
+    for(int i=1;i<11;i++){
+      ch->Add(("/project/HEP_EF/calvision/singlebar2/singleOP/1Mopticalphoton_"+to_string(i)+".root").c_str());
+    }
+    chain_file->cd();
+    ch->Merge(chain_file,0);
+    cout << "combined photon file created" << endl;
+  }
 
-  string fname = "./1Mopticalphoton_combined.root";
+  else{
+    cout << "combined photon file already exists, continuing" << endl;
+  }
+  
+  string fname = "./10Mopticalphoton.root";
   string timeS = "SDStime_r_S";
   string timeC = "SDCtime_r_S";
 
