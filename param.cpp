@@ -298,6 +298,7 @@ int main(int argc, char *argv[]){
   TCanvas *tc6 = new TCanvas();
   TH1F *hist_zpos_fraction = (TH1F*)hist_zpos_detected->Clone();
   hist_zpos_fraction->Divide(hist_zpos_generated);
+  hist_zpos_fraction->SetTitle("fraction of generated photons detected;mm");
   hist_zpos_fraction->Draw();
   tc6->Update();
   
