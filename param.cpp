@@ -84,7 +84,7 @@ int main(int argc, char *argv[]){
   TTree *tree = (TTree*)tf.Get("tree");
 
   string lambd = "1239.8/(inputMomentum[3]*1e9)";
-  int NBINSLAMBDA = 70;
+  const int NBINSLAMBDA = 70;
 
   // 2d hist of total number of photons simulated by layer and wavelength
   TH2F *h_tot = new TH2F("h_tot","total events by layer and lambda;pos mm;lamba nm",18,217.5,397.5,NBINSLAMBDA,300,1000);
@@ -92,43 +92,23 @@ int main(int argc, char *argv[]){
   gSystem->ProcessEvents();
 
   // 2d hist of probability of detection of photons by layer and wavelength
-  TH2F *h_pdetect = new TH2F("h_pdetect","prob detected vs. layer and lamdba;pos mm;lambda nm",18,217.5,397.5,NBINSLAMBDA,300,1000);
+  TH2F *h_pdetect = new TH2F("h_pdetect","Probability of Detection vs. Z-position and Wavelength;z mm;lambda nm",18,217.5,397.5,NBINSLAMBDA,300,1000);
   //tree->Draw((lambd+":inputInitialPosition[2]>>h_pdetect").c_str(),(timeS+"+"+timeC+">-2").c_str());
   tree->Draw((lambd+":inputInitialPosition[2]>>h_pdetect").c_str(),(timeS+">-1").c_str(),"colz");
   h_pdetect->Divide(h_tot);
   TCanvas* test = new TCanvas();
-  h_pdetect->Draw("colz");
-  test->Update();
+  h_pdetect->SetStats(0);
+  
 
   TH3F *h_time_pdfs = new TH3F("h_time_pdfs","Time dist by wavelength and z pos;time ns;lambda nm;z pos mm",100,0,10,NBINSLAMBDA,300,1000,18,217.5,397.5);
   tree->Draw(("inputInitialPosition[2]:"+lambd+":"+timeS+">>h_time_pdfs").c_str(),(timeS+">-1").c_str());
-  h_time_pdfs->ProjectionX("h_p",30,30,6,6)->Draw();
+  //h_time_pdfs->ProjectionX("h_p",30,30,6,6)->Draw();
   //test->Update();
+
+  h_pdetect->Draw("colz");
+  test->Update();
   
-  
-  //TH2F *time_layers[18]; // 2d hists of travel times dists by wavelength, one for each layer
-
-  //double layer_start, layer_end;
-
-  // fill 2d hist for each layer
-  //for (int i=0; i<18; i++){
-  //layer_start = 217.5 + 10*i;
-  //layer_end = layer_start + 10;
-    
-  //time_layers[i] = new TH2F(("h_"+to_string(i+1)).c_str(),("Wavelength and time dist from layer "+to_string(i+1)+";time ns;lambda nm").c_str(),100,0,10,NBINSLAMBDA,300,1000);
-
-    //tree->Draw((lambd+":"+timeS+">>h_"+to_string(i+1)).c_str(),("SDSdetected_r_S>0 && inputInitialPosition[2]>"+to_string(layer_start)+" && inputInitialPosition[2]<"+to_string(layer_end)).c_str());
-    //tree->Draw((lambd+":"+timeS+">>h_"+to_string(i+1)).c_str(),(timeS+">-1 && inputInitialPosition[2]>"+to_string(layer_start)+" && inputInitialPosition[2]<"+to_string(layer_end)).c_str());
-
-    // normalization
-    //time_layers[i]->Scale(1/time_layers[i]->Integral());
-
-    //cout << "Layer "+to_string(i+1)+" done" << endl;
-  //}
-
-
-
-
+  // setup for reading hits data
   TFile *hit_file = TFile::Open("/project/HEP_EF/calvision/singlebar2/Hayden_results/fastslow/mu_10G_3_withCounts.root");
   TTreeReader reader("tree",hit_file);
   TTreeReaderValue<vector<Float_t>> hit_energy(reader, "ECAL_r_hit_energy");
@@ -203,14 +183,14 @@ int main(int argc, char *argv[]){
 	// ProjectionX() projects the 3d hist onto the time (x) axis
 	// the ndx_lam arguments restrict the y-index used for the projection
 	// to the corresponding wavelength slice
+	// ndx_pos arguments restrict the z-index used to the corresponding
+	// z-position slice
 	// the +1 is needed because ROOT bin indices start at 1
-	//TH1D *proj = time_layers[ndx_pos]->ProjectionX("h_proj",ndx_lam+1,ndx_lam+1);
-
 	TH1D *proj = h_time_pdfs->ProjectionX("h_proj",ndx_lam+1,ndx_lam+1,ndx_pos+1,ndx_pos+1);
 
 	// theoretically if the photon has positive probability to be detected
 	// then the distribution of travel times should be nonzero
-	// but due to binning or some other effect there are ~5 that 
+	// but due to binning or some other effect there are a few that 
 	// give a 0 integral error, so this avoids that
 	if(proj->Integral() == 0){
 	  continue;
@@ -233,12 +213,11 @@ int main(int argc, char *argv[]){
       }
 
       hist_Nphotons_det->Fill(hit_Nphotons_det);
-      //cout << "E: "+to_string((*hit_energy)[i])+" t: "+to_string((*hit_time)[i])+" z: "+to_string((*hit_pos)[i]) + " " + to_string(ndx_pos)<< endl;
     }
   }
   
-  cout << "total photons: " +to_string(hist_arrivals->Integral()) << endl;
-  cout << "lost: " + to_string(loss) << endl;
+  cout << "total photons detected: " +to_string(hist_arrivals->GetEntries()) << endl;
+  cout << "total photons lost: " + to_string(loss) << endl;
 
   TCanvas *tc = new TCanvas();
   tc->Divide(3,2);
@@ -302,22 +281,14 @@ int main(int argc, char *argv[]){
   hist_zpos_fraction->Draw();
   tc6->Update();
   
-  
-  // test to make sure the projection function is working right
-
-  //TCanvas *tc2 = new TCanvas();
-  //tc2->Divide(2,1);
-  //TH1F *h_test1 = new TH1F("direct","direct;ns",100,0,10);
-  //TH1F *h_test2 = new TH1F("proj","projection;ns",100,0,10);
-  
-  //tc2->cd(1);
-  //tree->Draw((timeS+">>direct").c_str(),("SDSdetected_r_S>0 && inputInitialPosition[2]>"+to_string(237.5)+" && inputInitialPosition[2]<"+to_string(247.5)+" && "+lambd+">420 && "+lambd+"<430").c_str());
-  //h_test1->Draw("hist");
-
-  //tc2->cd(2);
-  //time_layers[2]->ProjectionX("h_proj",13,13)->Draw("hist");
-  //tc2->Update();
-  
+  TCanvas *tc7 = new TCanvas();
+  TH1D *proj = h_time_pdfs->ProjectionX("h_proj",0,-1,11,11);
+  proj->SetTitle("Travel Time Probability Distribution for Initial Z-Position 317.5-327.5 mm;ns");
+  proj->SetStats(0);
+  proj->Scale(1/proj->Integral());
+  proj->Draw("hist");
+  //h_time_pdfs->Draw("box");
+  tc7->Update();
 
   cout << "\nTo exit, quit ROOT from the File menu of the plot (or use control-C)" << endl;
   theApp.SetIdleTimer(600,".q");  // set up a failsafe timer to end the program
