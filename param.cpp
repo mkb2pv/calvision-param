@@ -23,8 +23,6 @@ using namespace std;
 
 int main(int argc, char *argv[]){
 
-  cout << "running" << endl;
-
   TApplication theApp("App", &argc, argv);
   //gStyle->SetOptStat(0);
 
@@ -51,16 +49,12 @@ int main(int argc, char *argv[]){
   for(int i=0; i<nEntries_FAST; i++){
     tg_scint_spectrum->SetPoint(tg_scint_spectrum->GetN(),PhotonWavelength_FAST[i],FastComponent[i]);
   }
- 
-  cout << "still running" << endl;
 
   for(int i=1;i<scint_spectrum->GetNbinsX()+1;i++){
     double x = scint_spectrum->GetBinCenter(i);
     double y = tg_scint_spectrum->Eval(x);
     scint_spectrum->SetBinContent(i,y);
   }
-
-  cout << "running 3" << endl;
 
   // store the scintillation yield in a tgraph for later use
   for(int i=0; i<nEntries_SCY; i++){
@@ -86,33 +80,12 @@ int main(int argc, char *argv[]){
   } 
 
   TTree *tree=chain;  // rename for convenience
-  //TFile *chain_file = TFile::Open("./10Mopticalphoton.root","CREATE");
-  //if(chain_file != nullptr){
-    
-  //  cout << "combining photon files (will take a minute, not necessary on subsequent runs)" << endl;
-  // TChain *ch = new TChain("tree","combined photon files");
-  // for(int i=1;i<11;i++){
-  //  ch->Add(("/project/HEP_EF/calvision/singlebar2/singleOP/1Mopticalphoton_"+to_string(i)+".root").c_str());
-  // }
-  //chain_file->cd();
-  //ch->Merge(chain_file,0);
-  //cout << "combined photon file created" << endl;
-  //}
 
-  //else{
-  //  cout << "combined photon file already exists, continuing" << endl;
-  //}
-  
-  string fname = "./10Mopticalphoton.root";
   //string timeS = "SDStime_r_S";
   //string timeC = "SDCtime_r_S";
 
-  //string fname = "/project/HEP_EF/calvision/singlebar2/Hayden_results/unified_results/mu_1G_1_withCounts.root";
   //string timeS = "SiPMS_time_r_S";
   //string timeC = "SiPMC_time_r_S";
-
-  //TFile tf = TFile(fname.c_str());
-  //TTree *tree = (TTree*)tf.Get("tree");
 
   string timeS = "SiPMS_time_r_S";
 
@@ -126,7 +99,6 @@ int main(int argc, char *argv[]){
 
   // 2d hist of probability of detection of photons by layer and wavelength
   TH2F *h_pdetect = new TH2F("h_pdetect","Probability of Detection vs. Z-position and Wavelength;Position along crystal (z)  mm;Wavelength nm",18,217.5,397.5,NBINSLAMBDA,300,1000);
-  //tree->Draw((lambd+":inputInitialPosition[2]>>h_pdetect").c_str(),(timeS+"+"+timeC+">-2").c_str());
   tree->Draw((lambd+":inputInitialPosition[2]>>h_pdetect").c_str(),(timeS+">-1").c_str(),"colz");
   h_pdetect->Divide(h_tot);
   TCanvas* test = new TCanvas();
@@ -135,8 +107,6 @@ int main(int argc, char *argv[]){
 
   TH3F *h_time_pdfs = new TH3F("h_time_pdfs","Time dist by wavelength and z pos;time ns;lambda nm;z pos mm",100,0,10,NBINSLAMBDA,300,1000,18,217.5,397.5);
   tree->Draw(("inputInitialPosition[2]:"+lambd+":"+timeS+">>h_time_pdfs").c_str(),(timeS+">-1").c_str());
-  //h_time_pdfs->ProjectionX("h_p",30,30,6,6)->Draw();
-  //test->Update();
 
   h_pdetect->Draw("colz");
   test->Update();
@@ -213,8 +183,6 @@ int main(int argc, char *argv[]){
 	  continue;
 	}
 	
-
-
 	// generate random travel time using pdfs generated from optical photons
 	// ProjectionX() projects the 3d hist onto the time (x) axis
 	// the ndx_lam arguments restrict the y-index used for the projection
@@ -299,63 +267,65 @@ int main(int argc, char *argv[]){
   gPad->BuildLegend(0.75,0.75,0.95,0.95);
   tc4->Update();
 
-  TCanvas *tc5 = new TCanvas();
-  tc5->Divide(2,1);
-  tc5->cd(1);
+  // additional diagnostic plots
+
+  //TCanvas *tc5 = new TCanvas();
+  //tc5->Divide(2,1);
+  //tc5->cd(1);
   //hist_wavelengths->Scale(1/hist_wavelengths->Integral());
   //hist_wavelengths->Draw("hist");
-  hist_zpos_generated->Draw("hist");
-  tc5->cd(2);
-  hist_zpos_detected->Draw("hist");
+  //hist_zpos_generated->Draw("hist");
+  //tc5->cd(2);
+  //hist_zpos_detected->Draw("hist");
   // scint_spectrum->Draw("hist");
-  tc5->Update();
+  //tc5->Update();
 
-  TCanvas *tc6 = new TCanvas();
-  TH1F *hist_zpos_fraction = (TH1F*)hist_zpos_detected->Clone();
-  hist_zpos_fraction->Divide(hist_zpos_generated);
-  hist_zpos_fraction->SetTitle("fraction of generated photons detected;mm");
-  hist_zpos_fraction->Draw();
-  tc6->Update();
+  //TCanvas *tc6 = new TCanvas();
+  //TH1F *hist_zpos_fraction = (TH1F*)hist_zpos_detected->Clone();
+  //hist_zpos_fraction->Divide(hist_zpos_generated);
+  //hist_zpos_fraction->SetTitle("fraction of generated photons detected;mm");
+  //hist_zpos_fraction->Draw();
+  //tc6->Update();
   
-  TCanvas *tc7 = new TCanvas();
-  tc7->SetLogy();
-  TH1D *proj = h_time_pdfs->ProjectionX("h_proj",0,-1,11,11);
-  proj->SetTitle("Travel Time Probability Distribution for Initial Z-Position 317.5-327.5 mm;ns");
-  proj->SetStats(0);
-  proj->Scale(1/proj->Integral());
-  proj->Draw("hist");
+  //TCanvas *tc7 = new TCanvas();
+  //tc7->SetLogy();
+  //TH1D *proj = h_time_pdfs->ProjectionX("h_proj",0,-1,11,11);
+  //proj->SetTitle("Travel Time Probability Distribution for Initial Z-Position 317.5-327.5 mm;ns");
+  //proj->SetStats(0);
+  //proj->Scale(1/proj->Integral());
+  //proj->Draw("hist");
   //h_time_pdfs->Draw("box");
-  tc7->Update();
+  //tc7->Update();
 
-  TCanvas *tc8 = new TCanvas();
-  hist_energy_deposited->Scale(1/500.0);
-  hist_energy_deposited->Draw("hist min0");
+  //TCanvas *tc8 = new TCanvas();
+  // hist_energy_deposited->Scale(1/500.0);
+  //hist_energy_deposited->Draw("hist min0");
   //hist_energy_deposited->SetStats(0);
-  tc8->Update();
+  //tc8->Update();
 
-  TCanvas *tc9 = new TCanvas();
-  tc9->Divide(2,1);
-  tc9->cd(1);
-  hist_E->Draw("hist");
-  tc9->cd(2);
-  hist_Nphotons->Draw("hist");
-  tc9->Update();
+  ///TCanvas *tc9 = new TCanvas();
+  //tc9->Divide(2,1);
+  //tc9->cd(1);
+  //hist_E->Draw("hist");
+  //tc9->cd(2);
+  //hist_Nphotons->Draw("hist");
+  //tc9->Update();
 
-  TCanvas *tc10 = new TCanvas();
-  tc10->Divide(2,1);
-  tc10->cd(1);
-  hist_Nphotons_det->Draw("hist");
-  tc10->cd(2);
-  hist_travel->Draw("hist");
-  tc10->Update();
+  //TCanvas *tc10 = new TCanvas();
+  //tc10->Divide(2,1);
+  //tc10->cd(1);
+  //hist_Nphotons_det->Draw("hist");
+  //tc10->cd(2);
+  //hist_travel->Draw("hist");
+  //tc10->Update();
 
-  TCanvas *tc11 = new TCanvas();
-  tc11->Divide(2,1);
-  tc11->cd(1);
-  hist_hit_times->Draw("hist");
-  tc11->cd(2);
-  hist_decay->Draw("hist");
-  tc11->Update();
+  //TCanvas *tc11 = new TCanvas();
+  //tc11->Divide(2,1);
+  //tc11->cd(1);
+  //hist_hit_times->Draw("hist");
+  //tc11->cd(2);
+  //hist_decay->Draw("hist");
+  //tc11->Update();
 
   cout << "\nTo exit, quit ROOT from the File menu of the plot (or use control-C)" << endl;
   theApp.SetIdleTimer(600,".q");  // set up a failsafe timer to end the program
