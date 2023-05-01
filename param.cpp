@@ -23,6 +23,8 @@ using namespace std;
 
 int main(int argc, char *argv[]){
 
+  cout << "running" << endl;
+
   TApplication theApp("App", &argc, argv);
   //gStyle->SetOptStat(0);
 
@@ -42,7 +44,24 @@ int main(int argc, char *argv[]){
   for(int i=0; i<nEntries_FAST; i++){
     scint_spectrum->Fill(PhotonWavelength_FAST[i],FastComponent[i]);
   }
+
+  // fix empty bin in scintillation spectrum by putting in tgraph, interpolating, and restoring to hist
+  TGraph *tg_scint_spectrum = new TGraph();
+  tg_scint_spectrum->SetTitle("scintillation spectrum;nm");
+  for(int i=0; i<nEntries_FAST; i++){
+    tg_scint_spectrum->SetPoint(tg_scint_spectrum->GetN(),PhotonWavelength_FAST[i],FastComponent[i]);
+  }
  
+  cout << "still running" << endl;
+
+  for(int i=1;i<scint_spectrum->GetNbinsX()+1;i++){
+    double x = scint_spectrum->GetBinCenter(i);
+    double y = tg_scint_spectrum->Eval(x);
+    scint_spectrum->SetBinContent(i,y);
+  }
+
+  cout << "running 3" << endl;
+
   // store the scintillation yield in a tgraph for later use
   for(int i=0; i<nEntries_SCY; i++){
     ScintilYield[i] = 0.3 * MeV * ScintilYield[i] * ElectronEnergy_SCY[i]; // this formula is used in the original file, unclear why
@@ -52,38 +71,50 @@ int main(int argc, char *argv[]){
   
   // set parameters for decay time distribution
   p_decay_time->SetParameters(5,15,0.3,0.7);
-  //p_decay_time->SetParameters(5,15,0.7,0.3);
-  //p_decay_time->SetParameters(5,15,1,0);
-  //p_decay_time->Draw();
   TCanvas tcd = TCanvas();
 
-  TFile *chain_file = TFile::Open("./10Mopticalphoton.root","CREATE");
-  if(chain_file != nullptr){
-    
-    cout << "combining photon files (will take a minute, not necessary on subsequent runs)" << endl;
-    TChain *ch = new TChain("tree","combined photon files");
-    for(int i=1;i<11;i++){
-      ch->Add(("/project/HEP_EF/calvision/singlebar2/singleOP/1Mopticalphoton_"+to_string(i)+".root").c_str());
-    }
-    chain_file->cd();
-    ch->Merge(chain_file,0);
-    cout << "combined photon file created" << endl;
-  }
 
-  else{
-    cout << "combined photon file already exists, continuing" << endl;
-  }
+  TChain *chain = new TChain("tree","combined photon files");
+  cout << "creating TChain of photon files" << endl;
+    
+  for(int i=1;i<11;i++){
+    //chain->Add(("/project/HEP_EF/calvision/singlebar2/singleOP/1Mopticalphoton_"+to_string(i)+".root").c_str());
+    //chain->Add(("/project/HEP_EF/calvision/singlebar2/singleOP_new_bh/1Mopticalphoton_"+to_string(i)+".root").c_str());
+    //chain->Add(("/project/HEP_EF/calvision/singlebar2/singleOP_new_hh/1Mopticalphoton_"+to_string(i)+".root").c_str());
+    if (i>5) break;
+    chain->Add(("/project/HEP_EF/calvision/singlebar2/Hayden_results/photons/1Mopticalphoton_"+to_string(i)+".root").c_str());
+  } 
+
+  TTree *tree=chain;  // rename for convenience
+  //TFile *chain_file = TFile::Open("./10Mopticalphoton.root","CREATE");
+  //if(chain_file != nullptr){
+    
+  //  cout << "combining photon files (will take a minute, not necessary on subsequent runs)" << endl;
+  // TChain *ch = new TChain("tree","combined photon files");
+  // for(int i=1;i<11;i++){
+  //  ch->Add(("/project/HEP_EF/calvision/singlebar2/singleOP/1Mopticalphoton_"+to_string(i)+".root").c_str());
+  // }
+  //chain_file->cd();
+  //ch->Merge(chain_file,0);
+  //cout << "combined photon file created" << endl;
+  //}
+
+  //else{
+  //  cout << "combined photon file already exists, continuing" << endl;
+  //}
   
   string fname = "./10Mopticalphoton.root";
-  string timeS = "SDStime_r_S";
-  string timeC = "SDCtime_r_S";
+  //string timeS = "SDStime_r_S";
+  //string timeC = "SDCtime_r_S";
 
   //string fname = "/project/HEP_EF/calvision/singlebar2/Hayden_results/unified_results/mu_1G_1_withCounts.root";
   //string timeS = "SiPMS_time_r_S";
   //string timeC = "SiPMC_time_r_S";
 
-  TFile tf = TFile(fname.c_str());
-  TTree *tree = (TTree*)tf.Get("tree");
+  //TFile tf = TFile(fname.c_str());
+  //TTree *tree = (TTree*)tf.Get("tree");
+
+  string timeS = "SiPMS_time_r_S";
 
   string lambd = "1239.8/(inputMomentum[3]*1e9)";
   const int NBINSLAMBDA = 70;
