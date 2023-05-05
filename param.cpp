@@ -43,6 +43,8 @@ int main(int argc, char *argv[]){
     scint_spectrum->Fill(PhotonWavelength_FAST[i],FastComponent[i]);
   }
 
+  scint_spectrum->Scale(1/scint_spectrum->Integral());
+
   // fix empty bin in scintillation spectrum by putting in tgraph, interpolating, and restoring to hist
   TGraph *tg_scint_spectrum = new TGraph();
   tg_scint_spectrum->SetTitle("scintillation spectrum;nm");
@@ -71,11 +73,10 @@ int main(int argc, char *argv[]){
   TChain *chain = new TChain("tree","combined photon files");
   cout << "creating TChain of photon files" << endl;
     
-  for(int i=1;i<11;i++){
+  for(int i=1;i<=11;i++){
     //chain->Add(("/project/HEP_EF/calvision/singlebar2/singleOP/1Mopticalphoton_"+to_string(i)+".root").c_str());
     //chain->Add(("/project/HEP_EF/calvision/singlebar2/singleOP_new_bh/1Mopticalphoton_"+to_string(i)+".root").c_str());
     //chain->Add(("/project/HEP_EF/calvision/singlebar2/singleOP_new_hh/1Mopticalphoton_"+to_string(i)+".root").c_str());
-    if (i>5) break;
     chain->Add(("/project/HEP_EF/calvision/singlebar2/Hayden_results/photons/1Mopticalphoton_"+to_string(i)+".root").c_str());
   } 
 
@@ -94,22 +95,40 @@ int main(int argc, char *argv[]){
 
   // 2d hist of total number of photons simulated by layer and wavelength
   TH2F *h_tot = new TH2F("h_tot","total events by layer and lambda;pos mm;lamba nm",18,217.5,397.5,NBINSLAMBDA,300,1000);
-  tree->Draw((lambd+":inputInitialPosition[2]>>h_tot").c_str());
+  tree->Draw((lambd+":inputInitialPosition[2]>>h_tot").c_str(),"","colz");
   gSystem->ProcessEvents();
 
   // 2d hist of probability of detection of photons by layer and wavelength
   TH2F *h_pdetect = new TH2F("h_pdetect","Probability of Detection vs. Z-position and Wavelength;Position along crystal (z)  mm;Wavelength nm",18,217.5,397.5,NBINSLAMBDA,300,1000);
   tree->Draw((lambd+":inputInitialPosition[2]>>h_pdetect").c_str(),(timeS+">-1").c_str(),"colz");
   h_pdetect->Divide(h_tot);
-  TCanvas* test = new TCanvas();
   h_pdetect->SetStats(0);
   
 
   TH3F *h_time_pdfs = new TH3F("h_time_pdfs","Time dist by wavelength and z pos;time ns;lambda nm;z pos mm",100,0,10,NBINSLAMBDA,300,1000,18,217.5,397.5);
   tree->Draw(("inputInitialPosition[2]:"+lambd+":"+timeS+">>h_time_pdfs").c_str(),(timeS+">-1").c_str());
 
+  TCanvas* test = new TCanvas();
   h_pdetect->Draw("colz");
   test->Update();
+
+  // create pdfs integrated on wavelength
+  TH2F *h_time_pdfs_int = new TH2F("h_time_pdfs_int","Time dist by z pos (integrated over wavelength;time ns;z pos mm",100,0,10,18,217.5,397.5);
+  
+
+  for(int i=1;i<=h_time_pdfs_int->GetNbinsX()+1;i++){ // iterate over time
+    for(int j=1;j<=h_time_pdfs_int->GetNbinsY()+1;j++){ // iterate over z pos
+      double w = 0;
+      for(int k=1;k<=NBINSLAMBDA+1;k++){ // iterate over wavelength
+	w += h_time_pdfs->GetBinContent(i,k,j)*tg_scint_spectrum->Eval(scint_spectrum->GetBinCenter(k));
+      }
+      h_time_pdfs_int->SetBinContent(i,j,w);
+    }    
+  }
+
+  TCanvas *test2 = new TCanvas();
+  h_time_pdfs_int->Draw("colz");
+  test2->Update();
   
   // setup for reading hits data
   TFile *hit_file = TFile::Open("/project/HEP_EF/calvision/singlebar2/Hayden_results/fastslow/mu_10G_3_withCounts.root");
@@ -129,8 +148,8 @@ int main(int argc, char *argv[]){
   TH1F *hist_hit_times = new TH1F("hist_hit_times","Hit Times;ns",100,0.5,1.3);
   TH1F *hist_arrivals = new TH1F("hist_arrivals","Photon Arrival Times (Fast Parameterization);ns",500,0,50);
   TH1F *hist_wavelengths = new TH1F("hist_wavelengths","Generated wavelengths;nm",100,0,1200);
-  TH1F *hist_zpos_generated = new TH1F("hist_zpos_generated","Generated zpos;mm",50,217.5,397.5);
-  TH1F *hist_zpos_detected = new TH1F("hist_zpos_detected","Detected zpos;mm",50,217.5,397.5);
+  TH1F *hist_zpos_generated = new TH1F("hist_zpos_generated","Generated zpos;mm",18,217.5,397.5);
+  TH1F *hist_zpos_detected = new TH1F("hist_zpos_detected","Detected zpos;mm",18,217.5,397.5);
   TH1F *hist_energy_deposited = new TH1F("hist_energy_deposited","Energy Depositions in Crystal per 10 GeV Muon;mm;MeV",50,217.5,397.5);
 
 
@@ -152,7 +171,7 @@ int main(int argc, char *argv[]){
       
       //hit_Nphoton_avg = scint_yield->Eval(hit_E *1000); // avg expected scintillation photons from this hit energy, some units issue requires multiplying by 1000 to get right order of magnitude
 
-      hit_Nphoton_avg = 450*hit_E; // 450 photons/MeV seems most accurate
+      hit_Nphoton_avg = 450*hit_E; // 450 photons/MeV is used by Geant
 
       if(hit_Nphoton_avg<100){
 	hit_Nphoton = rand.Poisson(hit_Nphoton_avg);
@@ -253,14 +272,14 @@ int main(int argc, char *argv[]){
   tc3->Update();
 
   TCanvas *tc4 = new TCanvas();
-  THStack *stack = new THStack("stack","Normalized Comparison of Geant and Fast Photon Arrival Times;ns");
+  THStack *stack = new THStack("stack","Comparison of Geant and Fast Photon Arrival Times;ns");
   TH1F *hist_arrivals_geant_cp = (TH1F*)hist_arrivals_geant->Clone();
   hist_arrivals_geant_cp->SetTitle("Geant;ns");
-  hist_arrivals_geant_cp->Scale(1/hist_arrivals_geant_cp->Integral());
+  //hist_arrivals_geant_cp->Scale(1/hist_arrivals_geant_cp->Integral());
   TH1F *hist_arrivals_cp = (TH1F*)hist_arrivals->Clone();
   hist_arrivals_cp->SetTitle("Fast;ns");
   hist_arrivals_cp->SetLineColor(kRed);
-  hist_arrivals_cp->Scale(1/hist_arrivals_cp->Integral());
+  //hist_arrivals_cp->Scale(1/hist_arrivals_cp->Integral());
   stack->Add(hist_arrivals_cp,"hist");
   stack->Add(hist_arrivals_geant_cp,"hist");
   stack->Draw("nostack");
@@ -280,12 +299,12 @@ int main(int argc, char *argv[]){
   // scint_spectrum->Draw("hist");
   //tc5->Update();
 
-  //TCanvas *tc6 = new TCanvas();
-  //TH1F *hist_zpos_fraction = (TH1F*)hist_zpos_detected->Clone();
-  //hist_zpos_fraction->Divide(hist_zpos_generated);
-  //hist_zpos_fraction->SetTitle("fraction of generated photons detected;mm");
-  //hist_zpos_fraction->Draw();
-  //tc6->Update();
+  TCanvas *tc6 = new TCanvas();
+  TH1F *hist_zpos_fraction = (TH1F*)hist_zpos_detected->Clone();
+  hist_zpos_fraction->Divide(hist_zpos_generated);
+  hist_zpos_fraction->SetTitle("fraction of generated photons detected;mm");
+  hist_zpos_fraction->Draw();
+  tc6->Update();
   
   //TCanvas *tc7 = new TCanvas();
   //tc7->SetLogy();

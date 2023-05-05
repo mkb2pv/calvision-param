@@ -11,3 +11,6 @@ test_conv: test_conv.cpp
 
 param: param.cpp
 	$(GXX) -o param param.cpp $(ROOTCFLAGS) $(LIBS) $(ROOTGLIBS)
+
+param2: param2.cpp
+	$(GXX) -o param2 param2.cpp $(ROOTCFLAGS) $(LIBS) $(ROOTGLIBS)
