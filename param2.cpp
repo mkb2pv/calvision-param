@@ -50,28 +50,13 @@ int main(int argc, char *argv[]){
     tg_scint_spectrum->SetPoint(tg_scint_spectrum->GetN(),PhotonWavelength_FAST[i],FastComponent[i]);
   }
 
-  // normalize to one to use as pdf??
-  double tot = tg_scint_spectrum->Integral();
-  //for(int i=0;i<nEntries_FAST;i++){
-  //  tg_scint_spectrum->SetPointY(i,tg_scint_spectrum->GetPointY(i)/tot);
-  //}
-
-  cout << to_string(tot) << endl;
-
   for(int i=1;i<scint_spectrum->GetNbinsX()+1;i++){
     double x = scint_spectrum->GetBinCenter(i);
     double y = tg_scint_spectrum->Eval(x);
     scint_spectrum->SetBinContent(i,y);
   }
 
-  cout << to_string(scint_spectrum->Integral()) << endl;
-
-  // store the scintillation yield in a tgraph for later use
-  for(int i=0; i<nEntries_SCY; i++){
-    ScintilYield[i] = 0.3 * MeV * ScintilYield[i] * ElectronEnergy_SCY[i]; // this formula is used in the original file, unclear why
-  }
-  TGraph *scint_yield = new TGraph(nEntries_SCY,ElectronEnergy_SCY,ScintilYield);
-  scint_yield->SetTitle("Scintillation photon yield vs energy;MeV");
+  scint_spectrum->Scale(1/scint_spectrum->Integral());
   
   // set parameters for decay time distribution
   p_decay_time->SetParameters(5,15,0.3,0.7);
@@ -117,9 +102,11 @@ int main(int argc, char *argv[]){
   for(int i=1;i<=h_pdetect_int->GetNbinsX();i++){ // iterate over position
      double w = 0;
      for(int k=1;k<=NBINSLAMBDA;k++){ // iterate over wavelength
-       double pspec = tg_scint_spectrum->Eval(h_pdetect->GetYaxis()->GetBinCenter(k));
+       // alternatively could try tg_scint_spectrum->Eval
+       double pspec = scint_spectrum->Interpolate(h_pdetect->GetYaxis()->GetBinCenter(k));
        if(pspec<=0) continue;
        w += h_pdetect->GetBinContent(i,k)*pspec;
+       cout << to_string(h_pdetect->GetBinContent(i,k)) + " " + to_string(pspec) << endl;
      }
      h_pdetect_int->SetBinContent(i,w);
   }
@@ -131,7 +118,7 @@ int main(int argc, char *argv[]){
   h_pdetect->Draw("colz");
   test->Update();
 
-  // create pdfs integrated on wavelength
+  // create time pdfs integrated on wavelength
   TH2F *h_time_pdfs_int = new TH2F("h_time_pdfs_int","Time dist by z pos (integrated over wavelength);time ns;z pos mm",100,0,10,18,217.5,397.5);
   
   for(int i=1;i<=h_time_pdfs_int->GetNbinsX();i++){ // iterate over time
@@ -208,8 +195,8 @@ int main(int argc, char *argv[]){
 
 
   // loop over all events in the tree
-  int nhits, hit_Nphoton;
-  double hit_E, hit_z, hit_t, hit_Nphoton_avg, pdet, travel_t, scint_t;
+  int nhits;
+  double hit_E, hit_z, hit_t, hit_Nphoton_avg, pdet;
   int loss = 0;
 
   while(reader.Next()){
@@ -222,15 +209,13 @@ int main(int argc, char *argv[]){
       hit_t = (*hit_time)[i]; // ns
 
       hist_energy_deposited->Fill(hit_z,hit_E);
-      
-      //hit_Nphoton_avg = scint_yield->Eval(hit_E *1000); // avg expected scintillation photons from this hit energy, some units issue requires multiplying by 1000 to get right order of magnitude
 
       hit_Nphoton_avg = 450*hit_E; // 450 photons/MeV is used by Geant
       
       int ndx_pos = (int)floor((hit_z - 217.5)/10);
       int hit_Nphotons_det = 0;
      
-      pdet = h_pdetect_int->GetBinContent(ndx_pos+1)/10;
+      pdet = h_pdetect_int->GetBinContent(ndx_pos+1);
 
       TH1D *proj = h_time_pdfs_int_conv->ProjectionX("h_proj",ndx_pos+1,ndx_pos+1);
 
