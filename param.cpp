@@ -112,22 +112,8 @@ int main(int argc, char *argv[]){
   h_pdetect->Draw("colz");
   test->Update();
 
-  // create pdfs integrated on wavelength
-  TH2F *h_time_pdfs_int = new TH2F("h_time_pdfs_int","Time dist by z pos (integrated over wavelength;time ns;z pos mm",100,0,10,18,217.5,397.5);
-  
-
-  for(int i=1;i<=h_time_pdfs_int->GetNbinsX()+1;i++){ // iterate over time
-    for(int j=1;j<=h_time_pdfs_int->GetNbinsY()+1;j++){ // iterate over z pos
-      double w = 0;
-      for(int k=1;k<=NBINSLAMBDA+1;k++){ // iterate over wavelength
-	w += h_time_pdfs->GetBinContent(i,k,j)*tg_scint_spectrum->Eval(scint_spectrum->GetBinCenter(k));
-      }
-      h_time_pdfs_int->SetBinContent(i,j,w);
-    }    
-  }
-
   TCanvas *test2 = new TCanvas();
-  h_time_pdfs_int->Draw("colz");
+  h_time_pdfs->Draw("colz");
   test2->Update();
   
   // setup for reading hits data
