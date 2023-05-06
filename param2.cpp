@@ -35,30 +35,13 @@ int main(int argc, char *argv[]){
   }
 
   // put the scintillation spectrum into a histogram for use later
-  double lambda_step = PhotonWavelength_FAST[nEntries_FAST-2]-PhotonWavelength_FAST[nEntries_FAST-1];
-  double lambda_min = PhotonWavelength_FAST[nEntries_FAST-1]-lambda_step/2;
-  double lambda_max = PhotonWavelength_FAST[0]+lambda_step/2;
-
-  //TH1F *scint_spectrum = new TH1F("scint_spectrum","scintillation spectrum;nm",(int)round((lambda_max-lambda_min)/lambda_step),lambda_min,lambda_max);
-  TH1F *scint_spectrum = new TH1F("scint_spectrum","scintillation spectrum;nm",NBINSLAMBDA,lambda_min,lambda_max);
+  TH1F *scint_spectrum = new TH1F("scint_spectrum","scintillation spectrum;nm",NBINSLAMBDA,300,1000);
   
   for(int i=0; i<nEntries_FAST; i++){
     scint_spectrum->Fill(PhotonWavelength_FAST[i],FastComponent[i]);
   }
 
-  // fix empty bin in scintillation spectrum by putting in tgraph, interpolating, and restoring to hist
-  TGraph *tg_scint_spectrum = new TGraph();
-  tg_scint_spectrum->SetTitle("scintillation spectrum;nm");
-  for(int i=0; i<nEntries_FAST; i++){
-    tg_scint_spectrum->SetPoint(tg_scint_spectrum->GetN(),PhotonWavelength_FAST[i],FastComponent[i]);
-  }
-
-  for(int i=1;i<scint_spectrum->GetNbinsX()+1;i++){
-    double x = scint_spectrum->GetBinCenter(i);
-    double y = tg_scint_spectrum->Eval(x);
-    scint_spectrum->SetBinContent(i,y);
-  }
-
+  //normalize to 1 to use as pdf
   scint_spectrum->Scale(1/scint_spectrum->Integral());
   
   // set parameters for decay time distribution
@@ -104,7 +87,6 @@ int main(int argc, char *argv[]){
   TH1F *h_pdetect_int = new TH1F("h_pdetect_int","Probability of Detection vs. Z-position;Position along crystal (z) mm",18,217.5,397.5);
   for(int i=1;i<=h_pdetect_int->GetNbinsX();i++){ // iterate over position
      double w = 0;
-     double sum_weights = 0;
      for(int k=1;k<=NBINSLAMBDA;k++){ // iterate over wavelength
        double pspec = scint_spectrum->GetBinContent(k);
        if(pspec<=0) continue;
@@ -128,7 +110,7 @@ int main(int argc, char *argv[]){
     for(int j=1;j<=h_time_pdfs_int->GetNbinsY();j++){ // iterate over z pos
       double w = 0;
       for(int k=1;k<=NBINSLAMBDA;k++){ // iterate over wavelength
-	double pspec = tg_scint_spectrum->Eval(h_pdetect->GetYaxis()->GetBinCenter(k));
+	double pspec = scint_spectrum->GetBinContent(k);
 	if(pspec <=0) continue;
 	w += h_time_pdfs->GetBinContent(i,k,j)*pspec;
       }
@@ -192,13 +174,13 @@ int main(int argc, char *argv[]){
   TH1F *hist_decay = new TH1F("hist_decay","Scintillation Decay Times of Detected Photons;ns",500,0,50);
   TH1F *hist_hit_times = new TH1F("hist_hit_times","Hit Times;ns",100,0.5,1.3);
   TH1F *hist_arrivals = new TH1F("hist_arrivals","Photon Arrival Times (Fast Parameterization);ns",500,0,50);
-  TH1F *hist_zpos_generated = new TH1F("hist_zpos_generated","Generated zpos;mm",50,217.5,397.5);
-  TH1F *hist_zpos_detected = new TH1F("hist_zpos_detected","Detected zpos;mm",50,217.5,397.5);
+  //TH1F *hist_zpos_generated = new TH1F("hist_zpos_generated","Generated zpos;mm",50,217.5,397.5);
+  //TH1F *hist_zpos_detected = new TH1F("hist_zpos_detected","Detected zpos;mm",50,217.5,397.5);
   TH1F *hist_energy_deposited = new TH1F("hist_energy_deposited","Energy Depositions in Crystal per 10 GeV Muon;mm;MeV",50,217.5,397.5);
 
 
   // loop over all events in the tree
-  int nhits, hit_Nphoton;
+  int nhits;
   double hit_E, hit_z, hit_t, hit_Nphoton_avg, pdet;
   int loss = 0;
 
@@ -216,7 +198,6 @@ int main(int argc, char *argv[]){
       hit_Nphoton_avg = 450*hit_E; // 450 photons/MeV is used by Geant
       
       int ndx_pos = (int)floor((hit_z - 217.5)/10);
-      int hit_Nphotons_det = 0;
      
       pdet = h_pdetect_int->GetBinContent(ndx_pos+1);
 
@@ -237,7 +218,7 @@ int main(int argc, char *argv[]){
 	else proj->SetBinContent(i,0);
       }
 
-      hist_arrivals->Add(proj,pdet*hit_Nphoton_avg);
+      hist_arrivals->Add(proj,pdet*hit_Nphoton_avg); // add dist weigthed by expected number of photons detected for this hit
       hist_Nphotons_det->Fill(pdet*hit_Nphoton_avg);
       hist_Nphotons->Fill(hit_Nphoton_avg);
     }
