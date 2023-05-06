@@ -26,6 +26,8 @@ int main(int argc, char *argv[]){
   TApplication theApp("App", &argc, argv);
   //gStyle->SetOptStat(0);
 
+  const int NBINSLAMBDA = 70;
+
   // convert scintillation energy spectrum to wavelength
   double PhotonWavelength_FAST[nEntries_FAST];
   for(int i=0; i<nEntries_FAST; i++){
@@ -37,7 +39,8 @@ int main(int argc, char *argv[]){
   double lambda_min = PhotonWavelength_FAST[nEntries_FAST-1]-lambda_step/2;
   double lambda_max = PhotonWavelength_FAST[0]+lambda_step/2;
 
-  TH1F *scint_spectrum = new TH1F("scint_spectrum","scintillation spectrum;nm",(int)round((lambda_max-lambda_min)/lambda_step),lambda_min,lambda_max);
+  //TH1F *scint_spectrum = new TH1F("scint_spectrum","scintillation spectrum;nm",(int)round((lambda_max-lambda_min)/lambda_step),lambda_min,lambda_max);
+  TH1F *scint_spectrum = new TH1F("scint_spectrum","scintillation spectrum;nm",NBINSLAMBDA,lambda_min,lambda_max);
   
   for(int i=0; i<nEntries_FAST; i++){
     scint_spectrum->Fill(PhotonWavelength_FAST[i],FastComponent[i]);
@@ -84,7 +87,7 @@ int main(int argc, char *argv[]){
   string timeS = "SiPMS_time_r_S";
 
   string lambd = "1239.8/(inputMomentum[3]*1e9)";
-  const int NBINSLAMBDA = 70;
+
 
   // 2d hist of total number of photons simulated by layer and wavelength
   TH2F *h_tot = new TH2F("h_tot","total events by layer and lambda;pos mm;lamba nm",18,217.5,397.5,NBINSLAMBDA,300,1000);
@@ -101,12 +104,12 @@ int main(int argc, char *argv[]){
   TH1F *h_pdetect_int = new TH1F("h_pdetect_int","Probability of Detection vs. Z-position;Position along crystal (z) mm",18,217.5,397.5);
   for(int i=1;i<=h_pdetect_int->GetNbinsX();i++){ // iterate over position
      double w = 0;
+     double sum_weights = 0;
      for(int k=1;k<=NBINSLAMBDA;k++){ // iterate over wavelength
-       // alternatively could try tg_scint_spectrum->Eval
-       double pspec = scint_spectrum->Interpolate(h_pdetect->GetYaxis()->GetBinCenter(k));
+       double pspec = scint_spectrum->GetBinContent(k);
        if(pspec<=0) continue;
        w += h_pdetect->GetBinContent(i,k)*pspec;
-       cout << to_string(h_pdetect->GetBinContent(i,k)) + " " + to_string(pspec) << endl;
+       //cout << to_string(h_pdetect->GetBinContent(i,k)) + " " + to_string(pspec) << endl;
      }
      h_pdetect_int->SetBinContent(i,w);
   }
@@ -195,7 +198,7 @@ int main(int argc, char *argv[]){
 
 
   // loop over all events in the tree
-  int nhits;
+  int nhits, hit_Nphoton;
   double hit_E, hit_z, hit_t, hit_Nphoton_avg, pdet;
   int loss = 0;
 
