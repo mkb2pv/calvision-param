@@ -73,40 +73,37 @@ int main(int argc, char *argv[]){
 
 
   // 2d hist of total number of photons simulated by layer and wavelength
-  TH2F *h_tot = new TH2F("h_tot","total events by layer and lambda;pos mm;lamba nm",18,217.5,397.5,NBINSLAMBDA,300,1000);
-  tree->Draw((lambd+":inputInitialPosition[2]>>h_tot").c_str(),"","colz");
-  gSystem->ProcessEvents();
+  //TH2F *h_tot = new TH2F("h_tot","total events by layer and lambda;pos mm;lamba nm",18,217.5,397.5,NBINSLAMBDA,300,1000);
+  //tree->Draw((lambd+":inputInitialPosition[2]>>h_tot").c_str(),"","colz");
+  //gSystem->ProcessEvents();
 
   // 2d hist of probability of detection of photons by layer and wavelength
-  TH2F *h_pdetect = new TH2F("h_pdetect","Probability of Detection vs. Z-position and Wavelength;Position along crystal (z) mm;Wavelength nm",18,217.5,397.5,NBINSLAMBDA,300,1000);
-  tree->Draw((lambd+":inputInitialPosition[2]>>h_pdetect").c_str(),(timeS+">-1").c_str(),"colz");
-  h_pdetect->Divide(h_tot);
-  h_pdetect->SetStats(0);
+  // TH2F *h_pdetect = new TH2F("h_pdetect","Probability of Detection vs. Z-position and Wavelength;Position along crystal (z) mm;Wavelength nm",18,217.5,397.5,NBINSLAMBDA,300,1000);
+  // tree->Draw((lambd+":inputInitialPosition[2]>>h_pdetect").c_str(),(timeS+">-1").c_str(),"colz");
+  // h_pdetect->Divide(h_tot);
+  // h_pdetect->SetStats(0);
 
   // create detection probability pdf integrated on wavelength
-  TH1F *h_pdetect_int = new TH1F("h_pdetect_int","Probability of Detection vs. Z-position;Position along crystal (z) mm",18,217.5,397.5);
-  for(int i=1;i<=h_pdetect_int->GetNbinsX();i++){ // iterate over position
-     double w = 0;
-     for(int k=1;k<=NBINSLAMBDA;k++){ // iterate over wavelength
-       double pspec = scint_spectrum->GetBinContent(k);
-       if(pspec<=0) continue;
-       w += h_pdetect->GetBinContent(i,k)*pspec;
+  //TH1F *h_pdetect_int = new TH1F("h_pdetect_int","Probability of Detection vs. Z-position;Position along crystal (z) mm",18,217.5,397.5);
+  //for(int i=1;i<=h_pdetect_int->GetNbinsX();i++){ // iterate over position
+  //   double w = 0;
+  //   for(int k=1;k<=NBINSLAMBDA;k++){ // iterate over wavelength
+  //     double pspec = scint_spectrum->GetBinContent(k);
+  //     if(pspec<=0) continue;
+  //     w += h_pdetect->GetBinContent(i,k)*pspec;
        //cout << to_string(h_pdetect->GetBinContent(i,k)) + " " + to_string(pspec) << endl;
-     }
-     h_pdetect_int->SetBinContent(i,w);
-  }
+       //  }
+     //  h_pdetect_int->SetBinContent(i,w);
+     //}
   
   TH3F *h_time_pdfs = new TH3F("h_time_pdfs","Time dist by wavelength and z pos;time ns;lambda nm;z pos mm",100,0,10,NBINSLAMBDA,300,1000,18,217.5,397.5);
-  tree->Draw(("inputInitialPosition[2]:"+lambd+":"+timeS+">>h_time_pdfs").c_str(),(timeS+">-1").c_str());
-
-  TCanvas* test = new TCanvas();
-  h_pdetect->Draw("colz");
-  test->Update();
+  //tree->Draw(("inputInitialPosition[2]:"+lambd+":"+timeS+">>h_time_pdfs").c_str(),(timeS+">-1").c_str());
+  tree->Draw(("inputInitialPosition[2]:"+lambd+":"+timeS+">>h_time_pdfs").c_str());
 
   // create time pdfs integrated on wavelength
   TH2F *h_time_pdfs_int = new TH2F("h_time_pdfs_int","Time dist by z pos (integrated over wavelength);time ns;z pos mm",100,0,10,18,217.5,397.5);
   
-  for(int i=1;i<=h_time_pdfs_int->GetNbinsX();i++){ // iterate over time
+  for(int i=0;i<=h_time_pdfs_int->GetNbinsX();i++){ // iterate over time
     for(int j=1;j<=h_time_pdfs_int->GetNbinsY();j++){ // iterate over z pos
       double w = 0;
       for(int k=1;k<=NBINSLAMBDA;k++){ // iterate over wavelength
@@ -115,13 +112,13 @@ int main(int argc, char *argv[]){
 	w += h_time_pdfs->GetBinContent(i,k,j)*pspec;
       }
       h_time_pdfs_int->SetBinContent(i,j,w);
-    }    
+    }
   }
 
   // convolve timing pdfs with decay time dist
   TH2F *h_time_pdfs_int_conv = new TH2F("h_time_pdfs_int_conv","Time dist by z-pos integrated over wavelength including decay time convolution;time ns;z pos mm",500,0,50,18,217.5,397.5);
   
-  for(int i=1;i<=h_time_pdfs_int_conv->GetNbinsX();i++){ // iterate over time
+  for(int i=0;i<=h_time_pdfs_int_conv->GetNbinsX();i++){ // iterate over time
     for(int j=1;j<=h_time_pdfs_int_conv->GetNbinsY();j++){ // iterate over z pos
       double w = 0;
       for(int k=1;k<=h_time_pdfs_int->GetNbinsX();k++){
@@ -133,21 +130,20 @@ int main(int argc, char *argv[]){
     }    
   }
 
-  // normalize all pdfs to one within their layer
+  //normalize all pdfs to the total probability of detection for each layer
   for(int i=1;i<=h_time_pdfs_int_conv->GetNbinsY();i++){ // iterate over position
-    double I = h_time_pdfs_int_conv->ProjectionX("h_proj",i,i)->Integral();
+    TH1D *proj = h_time_pdfs_int->ProjectionX("h_proj",i,i);
+    double Ndet = proj->Integral();
+    double Nlost = proj->GetBinContent(0);
+    double norm = Ndet/(Ndet+Nlost)/h_time_pdfs_int_conv->ProjectionX("h_proj2",i,i)->Integral();
     for(int j=1;j<=h_time_pdfs_int_conv->GetNbinsX();j++){
-      h_time_pdfs_int_conv->SetBinContent(j,i,h_time_pdfs_int_conv->GetBinContent(j,i)/I);
+      h_time_pdfs_int_conv->SetBinContent(j,i,h_time_pdfs_int_conv->GetBinContent(j,i)*norm);
     }
   }
 
   TCanvas *test2 = new TCanvas();
   h_time_pdfs_int->Draw("colz");
   test2->Update();
-
-  TCanvas *test3 = new TCanvas();
-  h_pdetect_int->Draw("hist");
-  test3->Update();
 
   TCanvas *test4 = new TCanvas();
   h_time_pdfs_int_conv->Draw("colz");
@@ -198,8 +194,6 @@ int main(int argc, char *argv[]){
       hit_Nphoton_avg = 450*hit_E; // 450 photons/MeV is used by Geant
       
       int ndx_pos = (int)floor((hit_z - 217.5)/10);
-     
-      pdet = h_pdetect_int->GetBinContent(ndx_pos+1);
 
       TH1D *proj = h_time_pdfs_int_conv->ProjectionX("h_proj",ndx_pos+1,ndx_pos+1);
 
@@ -213,13 +207,20 @@ int main(int argc, char *argv[]){
 
       // shift distribution by hit time
       int shift = (int)round(hit_t/0.1);
-      for(int i=proj->GetNbinsX();i>=1;i--){
-	if(i>=shift+1) proj->SetBinContent(i,proj->GetBinContent(i-shift));
-	else proj->SetBinContent(i,0);
-      }
 
-      hist_arrivals->Add(proj,pdet*hit_Nphoton_avg); // add dist weigthed by expected number of photons detected for this hit
-      hist_Nphotons_det->Fill(pdet*hit_Nphoton_avg);
+      
+
+      for(int i=hist_arrivals->GetNbinsX();i>=shift+1;i--){
+	hist_arrivals->Fill(hist_arrivals->GetBinCenter(i),proj->GetBinContent(i-shift)*hit_Nphoton_avg);
+      }
+    
+	
+      //	if(i>=shift+1) proj->SetBinContent(i,proj->GetBinContent(i-shift));
+      //	else proj->SetBinContent(i,0);
+	//}
+
+      //hist_arrivals->Add(proj,hit_Nphoton_avg); // add dist weighted by expected number of photons detected for this hit
+      hist_Nphotons_det->Fill(hit_Nphoton_avg);
       hist_Nphotons->Fill(hit_Nphoton_avg);
     }
   }
