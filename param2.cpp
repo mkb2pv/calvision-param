@@ -252,9 +252,9 @@ int main(int argc, char *argv[]){
   tc3->Update();
 
   TCanvas *tc4 = new TCanvas();
-  THStack *stack = new THStack("stack","Comparison of Geant and Fast Photon Arrival Times;ns");
+  THStack *stack = new THStack("stack","Comparison of Geant and Fast Photon Arrival Times;Arrival Time ns;Number of Photons");
   TH1F *hist_arrivals_geant_cp = (TH1F*)hist_arrivals_geant->Clone();
-  hist_arrivals_geant_cp->SetTitle("Geant;ns");
+  hist_arrivals_geant_cp->SetTitle("Geant;");
   //hist_arrivals_geant_cp->Scale(1/hist_arrivals_geant_cp->Integral());
   TH1F *hist_arrivals_cp = (TH1F*)hist_arrivals->Clone();
   hist_arrivals_cp->SetTitle("Fast;ns");
