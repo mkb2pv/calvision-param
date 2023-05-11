@@ -17,11 +17,15 @@
 #include <TRandom2.h>
 #include <THStack.h>
 #include <TStyle.h>
+#include <chrono>
 #include "materials.hpp" // contains material information for PWO
 
 using namespace std;
+using namespace std::chrono;
 
 int main(int argc, char *argv[]){
+
+  auto t0 = high_resolution_clock::now();
 
   TApplication theApp("App", &argc, argv);
   //gStyle->SetOptStat(0);
@@ -50,7 +54,6 @@ int main(int argc, char *argv[]){
 
 
   TChain *chain = new TChain("tree","combined photon files");
-  cout << "creating TChain of photon files" << endl;
     
   for(int i=1;i<=11;i++){
     //chain->Add(("/project/HEP_EF/calvision/singlebar2/singleOP/1Mopticalphoton_"+to_string(i)+".root").c_str());
@@ -70,34 +73,11 @@ int main(int argc, char *argv[]){
   string timeS = "SiPMS_time_r_S";
 
   string lambd = "1239.8/(inputMomentum[3]*1e9)";
-
-
-  // 2d hist of total number of photons simulated by layer and wavelength
-  //TH2F *h_tot = new TH2F("h_tot","total events by layer and lambda;pos mm;lamba nm",18,217.5,397.5,NBINSLAMBDA,300,1000);
-  //tree->Draw((lambd+":inputInitialPosition[2]>>h_tot").c_str(),"","colz");
-  //gSystem->ProcessEvents();
-
-  // 2d hist of probability of detection of photons by layer and wavelength
-  // TH2F *h_pdetect = new TH2F("h_pdetect","Probability of Detection vs. Z-position and Wavelength;Position along crystal (z) mm;Wavelength nm",18,217.5,397.5,NBINSLAMBDA,300,1000);
-  // tree->Draw((lambd+":inputInitialPosition[2]>>h_pdetect").c_str(),(timeS+">-1").c_str(),"colz");
-  // h_pdetect->Divide(h_tot);
-  // h_pdetect->SetStats(0);
-
-  // create detection probability pdf integrated on wavelength
-  //TH1F *h_pdetect_int = new TH1F("h_pdetect_int","Probability of Detection vs. Z-position;Position along crystal (z) mm",18,217.5,397.5);
-  //for(int i=1;i<=h_pdetect_int->GetNbinsX();i++){ // iterate over position
-  //   double w = 0;
-  //   for(int k=1;k<=NBINSLAMBDA;k++){ // iterate over wavelength
-  //     double pspec = scint_spectrum->GetBinContent(k);
-  //     if(pspec<=0) continue;
-  //     w += h_pdetect->GetBinContent(i,k)*pspec;
-       //cout << to_string(h_pdetect->GetBinContent(i,k)) + " " + to_string(pspec) << endl;
-       //  }
-     //  h_pdetect_int->SetBinContent(i,w);
-     //}
   
+  // bin all photon events by travel time, wavelength, and z pos
+  // note photons that don't reach the crystal have their travel time
+  // set to -1 and will therefore be included in the underflow bin
   TH3F *h_time_pdfs = new TH3F("h_time_pdfs","Time dist by wavelength and z pos;time ns;lambda nm;z pos mm",100,0,10,NBINSLAMBDA,300,1000,18,217.5,397.5);
-  //tree->Draw(("inputInitialPosition[2]:"+lambd+":"+timeS+">>h_time_pdfs").c_str(),(timeS+">-1").c_str());
   tree->Draw(("inputInitialPosition[2]:"+lambd+":"+timeS+">>h_time_pdfs").c_str());
 
   // create time pdfs integrated on wavelength
@@ -107,6 +87,7 @@ int main(int argc, char *argv[]){
     for(int j=1;j<=h_time_pdfs_int->GetNbinsY();j++){ // iterate over z pos
       double w = 0;
       for(int k=1;k<=NBINSLAMBDA;k++){ // iterate over wavelength
+	// sum of number of single photons detected weighted by scintillation spectrum (which is normalized to 1)
 	double pspec = scint_spectrum->GetBinContent(k);
 	if(pspec <=0) continue;
 	w += h_time_pdfs->GetBinContent(i,k,j)*pspec;
@@ -115,13 +96,15 @@ int main(int argc, char *argv[]){
     }
   }
 
-  // convolve timing pdfs with decay time dist
+  // convolve timing distributions with decay time dist
   TH2F *h_time_pdfs_int_conv = new TH2F("h_time_pdfs_int_conv","Time dist by z-pos integrated over wavelength including decay time convolution;time ns;z pos mm",500,0,50,18,217.5,397.5);
   
-  for(int i=0;i<=h_time_pdfs_int_conv->GetNbinsX();i++){ // iterate over time
+  for(int i=0;i<=h_time_pdfs_int_conv->GetNbinsX();i++){ // iterate over possible sum travel plus decay times
     for(int j=1;j<=h_time_pdfs_int_conv->GetNbinsY();j++){ // iterate over z pos
       double w = 0;
-      for(int k=1;k<=h_time_pdfs_int->GetNbinsX();k++){
+      for(int k=1;k<=h_time_pdfs_int->GetNbinsX();k++){ // iterate over possible travel times
+	// sum over all travel times of number of photons in this layer with that travel time
+	// multiplied by probability of decay time equal to travel + decay time minus travel time
 	double s = h_time_pdfs_int_conv->GetXaxis()->GetBinCenter(i) - h_time_pdfs_int->GetXaxis()->GetBinCenter(k);
 	if(s<0) continue;
 	w += h_time_pdfs_int->GetBinContent(k,j)*p_decay_time->Eval(s);
@@ -133,13 +116,20 @@ int main(int argc, char *argv[]){
   //normalize all pdfs to the total probability of detection for each layer
   for(int i=1;i<=h_time_pdfs_int_conv->GetNbinsY();i++){ // iterate over position
     TH1D *proj = h_time_pdfs_int->ProjectionX("h_proj",i,i);
-    double Ndet = proj->Integral();
-    double Nlost = proj->GetBinContent(0);
-    double norm = Ndet/(Ndet+Nlost)/h_time_pdfs_int_conv->ProjectionX("h_proj2",i,i)->Integral();
+    double Ndet = proj->Integral(); // number of single photons in this layer that were detected (after weighting by scintillation spectrum)
+    double Nlost = proj->GetBinContent(0); // number of single photons in this layer that were lost (after weighting by scintillation spectrum)
+    double norm = Ndet/(Ndet+Nlost)/h_time_pdfs_int_conv->ProjectionX("h_proj2",i,i)->Integral(); // want to normalize to fraction of photons that was detected
     for(int j=1;j<=h_time_pdfs_int_conv->GetNbinsX();j++){
       h_time_pdfs_int_conv->SetBinContent(j,i,h_time_pdfs_int_conv->GetBinContent(j,i)*norm);
     }
   }
+
+  // faster to look up the distributions in an array than use the projection function each time in hit loop
+  TH1D *arr_time_pdfs_int_conv[18];
+  for(int i=0;i<18;i++){
+    arr_time_pdfs_int_conv[i]=h_time_pdfs_int_conv->ProjectionX(("h_proj"+to_string(i+1)).c_str(),i+1,i+1);
+  }
+
 
   TCanvas *test2 = new TCanvas();
   h_time_pdfs_int->Draw("colz");
@@ -174,11 +164,11 @@ int main(int argc, char *argv[]){
   //TH1F *hist_zpos_detected = new TH1F("hist_zpos_detected","Detected zpos;mm",50,217.5,397.5);
   TH1F *hist_energy_deposited = new TH1F("hist_energy_deposited","Energy Depositions in Crystal per 10 GeV Muon;mm;MeV",50,217.5,397.5);
 
+  auto t1 = high_resolution_clock::now();
 
   // loop over all events in the tree
   int nhits;
-  double hit_E, hit_z, hit_t, hit_Nphoton_avg, pdet;
-  int loss = 0;
+  double hit_E, hit_z, hit_t, hit_Nphoton_avg;
 
   while(reader.Next()){
     nhits = (*hit_energy).size();
@@ -194,8 +184,11 @@ int main(int argc, char *argv[]){
       hit_Nphoton_avg = 450*hit_E; // 450 photons/MeV is used by Geant
       
       int ndx_pos = (int)floor((hit_z - 217.5)/10);
-
-      TH1D *proj = h_time_pdfs_int_conv->ProjectionX("h_proj",ndx_pos+1,ndx_pos+1);
+      if(ndx_pos > 17) ndx_pos = 17; // this seems to happen occasionally
+      //cout << to_string(ndx_pos) << endl;
+      // get photon time distribution for this layer
+      //TH1D *proj = h_time_pdfs_int_conv->ProjectionX("h_proj",ndx_pos+1,ndx_pos+1);
+      TH1D *proj = arr_time_pdfs_int_conv[ndx_pos]; // faster than ProjectionX()
 
       // theoretically if the photon has positive probability to be detected
       // then the distribution of travel times should be nonzero
@@ -207,25 +200,27 @@ int main(int argc, char *argv[]){
 
       // shift distribution by hit time
       int shift = (int)round(hit_t/0.1);
-
-      
-
       for(int i=hist_arrivals->GetNbinsX();i>=shift+1;i--){
-	hist_arrivals->Fill(hist_arrivals->GetBinCenter(i),proj->GetBinContent(i-shift)*hit_Nphoton_avg);
+	// add photon time distribution after shifting by hit time to final arrival time distribution
+	//hist_arrivals->Fill(hist_arrivals->GetBinCenter(i),proj->GetBinContent(i-shift)*hit_Nphoton_avg);
+	hist_arrivals->SetBinContent(i,hist_arrivals->GetBinContent(i)+proj->GetBinContent(i-shift)*hit_Nphoton_avg); // faster than the line above
       }
-    
-	
-      //	if(i>=shift+1) proj->SetBinContent(i,proj->GetBinContent(i-shift));
-      //	else proj->SetBinContent(i,0);
-	//}
-
-      //hist_arrivals->Add(proj,hit_Nphoton_avg); // add dist weighted by expected number of photons detected for this hit
+   
       hist_Nphotons_det->Fill(hit_Nphoton_avg);
       hist_Nphotons->Fill(hit_Nphoton_avg);
     }
   }
-  cout << "total photons detected: " +to_string(hist_arrivals->GetEntries()) << endl;
-  cout << "total photons lost: " + to_string(loss) << endl;
+
+  auto t2 = high_resolution_clock::now();
+
+  cout << "Total photons detected: " +to_string(hist_arrivals->Integral()) << endl;
+
+  chrono::duration<double> time1 = t1 - t0;
+  cout << "Time for single photon processing: " << time1.count() << " s" << endl;
+
+  chrono::duration<double> time2 = t2 - t1;
+  cout << "Time for hit processing: " << time2.count() << " s" << endl;
+  cout << "Total time: " << time1.count() + time2.count() << " s" << endl;
 
   TCanvas *tc = new TCanvas();
   tc->Divide(3,2);
